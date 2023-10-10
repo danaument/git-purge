@@ -1,0 +1,79 @@
+#!/usr/bin/env python3
+
+import subprocess
+from InquirerPy import inquirer
+
+def get_branches():
+    branches = [
+        branch.split()[-1]  # this will take the last part of the split, which should be the branch name
+        for branch in subprocess.check_output(['git', 'branch', '-l']).decode().splitlines()
+        if 'main' not in branch
+    ]
+    return branches
+
+def remove_branches(branches_to_remove):
+    removed_branches = []
+    for branch in branches_to_remove:
+        try:
+            # Check current branch and switch if needed
+            current_branch = subprocess.check_output(['git', 'rev-parse', '--abbrev-ref', 'HEAD']).decode().strip()
+            if current_branch == branch:
+                subprocess.run(['git', 'checkout', 'main'])
+            subprocess.run(['git', 'branch', '-D', branch], check=True)
+            removed_branches.append(branch)
+        except subprocess.CalledProcessError:
+            pass
+    return removed_branches
+
+def main():
+    branches = get_branches()
+    if not branches:
+        print("No branches other than 'main'. Exiting.")
+        return
+
+    removed_branches = []
+    exit_flag = False
+
+    while not exit_flag:
+        action = inquirer.select(
+            message="What would you like to do?",
+            choices=[
+                'remove all branches except main',
+                'select branches to remove',
+                'exit'
+            ]
+        ).execute()
+
+        if action == 'remove all branches except main':
+            if branches:
+                removed_branches.extend(remove_branches(branches))
+                break
+
+        elif action == 'select branches to remove':
+            while True:
+                branches = get_branches()
+                if not branches:
+                    print("No more branches to select from.")
+                    break
+                
+                branch_choice = inquirer.select(
+                    message="Select a branch to remove:",
+                    choices=branches + ['exit']
+                ).execute()
+
+                if branch_choice == 'exit':
+                    exit_flag = True
+                    break
+
+                # Now remove the branch
+                removed = remove_branches([branch_choice])
+                removed_branches.extend(removed)
+
+        elif action == 'exit':
+            break
+
+    if removed_branches:
+        print("Removed branches:", ", ".join(removed_branches))
+
+if __name__ == "__main__":
+    main()
